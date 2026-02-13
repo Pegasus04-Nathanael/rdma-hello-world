@@ -588,11 +588,27 @@ int main() {
     printf("    FIN DU SERVEUR\n");
     printf("═══════════════════════════════════════════════════\n");
     
-    // Cleanup
-    ibv_dereg_mr(mr);
+    // Cleanup - ordre important !
+    // 1. Détruire QP (flushes pending work)
     ibv_destroy_qp(client_id->qp);
+    
+    // 2. Drainer CQ
+    struct ibv_wc wc_drain;
+    int drain_count = 0;
+    while (ibv_poll_cq(cq, 1, &wc_drain) > 0) {
+        drain_count++;
+    }
+    
+    // 3. Détruire CQ
     ibv_destroy_cq(cq);
+    
+    // 4. Déregistrer MR
+    ibv_dereg_mr(mr);
+    
+    // 5. Deallocate PD
     ibv_dealloc_pd(pd);
+    
+    // 6-8. Connexion RDMA
     rdma_destroy_id(client_id);
     rdma_destroy_id(cm_id);
     rdma_destroy_event_channel(cm_channel);
