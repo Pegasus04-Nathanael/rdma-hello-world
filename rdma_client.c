@@ -237,11 +237,13 @@ int main(int argc, char *argv[]) {
     // ═══════════════════════════════════════════════════════
     // POSTER LE RECV ICI (AVANT CONNEXION) !
     // ═══════════════════════════════════════════════════════
+    // NOTE: Le serveur met les infos à la FIN du buffer
+    // Donc on reçoit à la fin también
     
     //struct rdma_buffer_info server_info;
     
     struct ibv_sge recv_sge;
-    recv_sge.addr = (uint64_t)local_buffer;  // ← ICI !
+    recv_sge.addr = (uint64_t)(local_buffer + BUFFER_SIZE - sizeof(server_info));  // ← À la FIN !
     recv_sge.length = sizeof(server_info);
     recv_sge.lkey = local_mr->lkey;
     
@@ -332,7 +334,7 @@ int main(int argc, char *argv[]) {
     
     printf("   ✅ Infos reçues avec succès !\n\n");
 
-    memcpy(&server_info, local_buffer, sizeof(server_info));
+    memcpy(&server_info, local_buffer + BUFFER_SIZE - sizeof(server_info), sizeof(server_info));
     
     printf("   ┌─────────────────────────────────────────────┐\n");
     printf("   │ INFORMATIONS REÇUES DU SERVEUR :            │\n");
