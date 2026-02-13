@@ -382,12 +382,10 @@ int main(int argc, char *argv[]) {
     printf("   │ recv_mr LKEY        : 0x%08x            │\n", recv_mr->lkey);
     printf("   │ rdma_mr LKEY        : 0x%08x            │\n", rdma_mr->lkey);
     printf("   │                                             │\n");
-    printf("   │ Je peux maintenant accéder à cette RAM !    │\n");
-    printf("   │ → RDMA_READ  pour lire                      │\n");
-    printf("   │ → RDMA_WRITE pour écrire                    │\n");
+    printf("   │ ✅ Connexion établie - attente données...   │\n");
     printf("   └─────────────────────────────────────────────┘\n\n");
     
-    sleep(2);
+    sleep(1);
     
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 12 : RDMA READ - LIRE LA RAM DU SERVEUR
@@ -409,39 +407,33 @@ int main(int argc, char *argv[]) {
     //
     // Latence totale : 1-5 μs (vs 5 ms pour disque)
     
-    printf("📖 ÉTAPE 12 : RDMA READ - Lecture RAM serveur\n");
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 12 : RECEVOIR LES DONNÉES DU SERVEUR
+    // ═══════════════════════════════════════════════════════
+    // Le serveur va nous envoyer le contenu de son buffer via SEND
+    
+    printf("📖 ÉTAPE 12 : Réception données serveur\n");
     printf("   ┌─────────────────────────────────────────────┐\n");
-    printf("   │ Je vais lire DIRECTEMENT la RAM serveur    │\n");
-    printf("   │ SANS réveiller son CPU !                    │\n");
-    printf("   │                                             │\n");
-    printf("   │ Ma carte IB ──> Carte IB serveur ──> RAM   │\n");
-    printf("   │                 (bypass CPU)                │\n");
+    printf("   │ Attente du contenu RAM serveur...           │\n");
     printf("   └─────────────────────────────────────────────┘\n\n");
     
-    // Préparer RDMA READ
-    struct ibv_sge read_sge;
-    read_sge.addr = (uint64_t)rdma_buffer;
-    read_sge.length = 100;  // Lire 100 octets
-    read_sge.lkey = rdma_mr->lkey;
-
-    struct ibv_send_wr *bad_wr = NULL;
+    // Poster RECV pour recevoir les données du serveur
+    struct ibv_sge recv_data_sge;
+    recv_data_sge.addr = (uint64_t)rdma_buffer;
+    recv_data_sge.length = 100;  // Recevoir 100 octets
+    recv_data_sge.lkey = rdma_mr->lkey;
     
-    struct ibv_send_wr read_wr;
-    memset(&read_wr, 0, sizeof(read_wr));
-    read_wr.wr_id = 3;
-    read_wr.sg_list = &read_sge;
-    read_wr.num_sge = 1;
-    read_wr.opcode = IBV_WR_RDMA_READ;  // ← RDMA READ !
-    read_wr.send_flags = IBV_SEND_SIGNALED;
-    read_wr.wr.rdma.remote_addr = server_info.addr;  // Adresse serveur
-    read_wr.wr.rdma.rkey = server_info.rkey;         // Clé d'accès
+    struct ibv_recv_wr recv_data_wr, *bad_recv_data_wr;
+    memset(&recv_data_wr, 0, sizeof(recv_data_wr));
+    recv_data_wr.wr_id = 10;
+    recv_data_wr.sg_list = &recv_data_sge;
+    recv_data_wr.num_sge = 1;
     
-    ret = ibv_post_send(cm_id->qp, &read_wr, &bad_wr);
+    ret = ibv_post_recv(cm_id->qp, &recv_data_wr, &bad_recv_data_wr);
     if (ret) {
-        perror("   ❌ ibv_post_send (READ)");
+        perror("   ❌ ibv_post_recv (données)");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -451,21 +443,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // Attendre complétion
+    // Attendre la réception des données
     while (ibv_poll_cq(cq, 1, &wc) < 1);
     
     if (wc.status != IBV_WC_SUCCESS) {
-        printf("   ❌ RDMA READ échoué\n");
-        printf("   📍 DEBUG - Work Completion Status: %d\n", wc.status);
-        printf("   📍 DEBUG - WR ID: %ld\n", wc.wr_id);
-        printf("   📍 DEBUG - RDMA buffer: %p\n", rdma_buffer);
-        printf("   📍 DEBUG - RDMA MR LKEY: 0x%x\n", rdma_mr->lkey);
-        printf("   📍 DEBUG - Remote addr: 0x%016lx\n", server_info.addr);
-        printf("   📍 DEBUG - Remote RKEY: 0x%08x\n", server_info.rkey);
-        printf("   📍 Status codes: 0=success, 4=local_length_error, 7=local_protection_error, 9=remote_access_error\n");
+        printf("   ❌ Réception données échouée (code: %d)\n", wc.status);
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -477,9 +461,9 @@ int main(int argc, char *argv[]) {
     
     rdma_buffer[99] = '\0';  // Terminer la chaîne
     
-    printf("   ✨ RDMA READ RÉUSSI ! ✨\n");
+    printf("   ✨ DONNÉES REÇUES ! ✨\n");
     printf("   ┌─────────────────────────────────────────────┐\n");
-    printf("   │ Lu DIRECTEMENT depuis RAM serveur :         │\n");
+    printf("   │ Contenu reçu du serveur :                   │\n");
     printf("   │ '%s'    │\n", rdma_buffer);
     printf("   │                                             │\n");
     printf("   │ ✓ Le serveur ne s'est PAS réveillé !        │\n");

@@ -481,13 +481,47 @@ int main() {
     }
 
     printf("   ✅ Infos envoyées au client\n\n");
+    
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 13 : ENVOYER LE CONTENU DU BUFFER AU CLIENT
+    // ═══════════════════════════════════════════════════════
+    printf("📤 ÉTAPE 13 : Envoi contenu RAM au client\n");
+    
+    struct ibv_sge sge_data;
+    sge_data.addr = (uint64_t)buffer;
+    sge_data.length = 100;  // Envoyer 100 octets
+    sge_data.lkey = mr->lkey;
+    
+    struct ibv_send_wr send_wr_data, *bad_wr_data;
+    memset(&send_wr_data, 0, sizeof(send_wr_data));
+    send_wr_data.wr_id = 2;
+    send_wr_data.sg_list = &sge_data;
+    send_wr_data.num_sge = 1;
+    send_wr_data.opcode = IBV_WR_SEND;
+    send_wr_data.send_flags = IBV_SEND_SIGNALED;
+    
+    ret = ibv_post_send(client_id->qp, &send_wr_data, &bad_wr_data);
+    if (ret) {
+        perror("   ❌ ibv_post_send (données)");
+        return 1;
+    }
+    
+    // Attendre complétion
+    while (ibv_poll_cq(cq, 1, &wc) < 1);
+    
+    if (wc.status != IBV_WC_SUCCESS) {
+        printf("   ❌ Envoi données échoué (status: %d)\n", wc.status);
+        return 1;
+    }
+    
+    printf("   ✅ Données envoyées au client\n\n");
 
     // ═══════════════════════════════════════════════════════
-    // ÉTAPE 13 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
+    // ÉTAPE 14 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
     // ═══════════════════════════════════════════════════════
     // À PARTIR DE MAINTENANT :
     // → Le serveur dort
-    // → Le client va lire/écrire dans la RAM
+    // → Le client a reçu les données
     // → La carte InfiniBand gère tout
     // → Le CPU du serveur reste endormi
     // → C'est la MAGIE de RDMA !
