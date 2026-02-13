@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <rdma/rdma_cma.h>
 
 #define BUFFER_SIZE 1024*1024  // 1 MB de RAM à exposer
@@ -43,6 +44,16 @@ int main() {
     printf("═══════════════════════════════════════════════════\n");
     printf("    RDMA SERVER - HELLO WORLD INFINIBAND\n");
     printf("═══════════════════════════════════════════════════\n\n");
+    
+    // CRITICAL: Verrouiller la mémoire pour RDMA
+    // Évite que le kernel ne "swap" la mémoire sur disque
+    // Ce qui bloquerait l'HCA d'accéder à la RAM physique
+    printf("🔒 Verrouillage mémoire pour RDMA...\n");
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        perror("   ⚠️  mlockall échoué (non-critique, continue)");
+    } else {
+        printf("   ✅ Mémoire verrouillée pour RDMA\n\n");
+    }
     
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 1 : ALLOUER LA RAM QU'ON VA EXPOSER
