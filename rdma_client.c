@@ -46,6 +46,9 @@ struct rdma_buffer_info {
 
 int main(int argc, char *argv[]) {
     struct rdma_buffer_info server_info;
+    struct ibv_wc wc;
+
+    
     if (argc != 2) {
         printf("Usage: %s <server_ip>\n", argv[0]);
         printf("Exemple: %s 10.10.1.1\n", argv[0]);
@@ -309,7 +312,7 @@ int main(int argc, char *argv[]) {
     printf("   (Le RECV est déjà posté, on attend...)\n\n");
     
     // Attendre la complétion du RECV
-    struct ibv_wc wc;
+    //struct ibv_wc wc;
     while (ibv_poll_cq(cq, 1, &wc) < 1) {
         // Polling... attente active
     }
