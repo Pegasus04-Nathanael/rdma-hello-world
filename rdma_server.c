@@ -482,6 +482,9 @@ int main() {
 
     printf("   ✅ Infos envoyées au client\n\n");
     
+    // Attendre que le client poste son RECV
+    sleep(1);
+    
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 13 : ENVOYER LE CONTENU DU BUFFER AU CLIENT
     // ═══════════════════════════════════════════════════════
