@@ -419,7 +419,7 @@ int main() {
 
     // Préparer la requête d'envoi (depuis le buffer qui est enregistré)
     struct ibv_sge sge;
-    sge.addr = (uint64_t)buffer;  // ← buffer, pas &info
+    sge.addr = (uint64_t)info;  // ← Envoyer depuis info, pas buffer !
     sge.length = sizeof(struct rdma_buffer_info);
     sge.lkey = mr->lkey;
 
