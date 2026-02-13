@@ -443,6 +443,63 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 13 : ENVOYER SIGNAL AU SERVEUR
+    // ═══════════════════════════════════════════════════════
+    // Dire au serveur : "Je suis prêt, tu peux envoyer"
+    
+    printf("📤 ÉTAPE 13 : Envoi signal au serveur\n");
+    
+    struct ibv_sge signal_sge;
+    signal_sge.addr = (uint64_t)rdma_buffer;
+    signal_sge.length = 1;  // Juste 1 byte
+    signal_sge.lkey = rdma_mr->lkey;
+    
+    struct ibv_send_wr signal_wr, *bad_signal_wr;
+    memset(&signal_wr, 0, sizeof(signal_wr));
+    signal_wr.wr_id = 20;
+    signal_wr.sg_list = &signal_sge;
+    signal_wr.num_sge = 1;
+    signal_wr.opcode = IBV_WR_SEND;
+    signal_wr.send_flags = IBV_SEND_SIGNALED;
+    
+    ret = ibv_post_send(cm_id->qp, &signal_wr, &bad_signal_wr);
+    if (ret) {
+        perror("   ❌ ibv_post_send (signal)");
+        ibv_dereg_mr(rdma_mr);
+        ibv_dereg_mr(recv_mr);
+        ibv_destroy_qp(cm_id->qp);
+        ibv_destroy_cq(cq);
+        ibv_dealloc_pd(pd);
+        rdma_disconnect(cm_id);
+        rdma_destroy_id(cm_id);
+        rdma_destroy_event_channel(cm_channel);
+        return 1;
+    }
+    
+    // Attendre complétion du signal
+    while (ibv_poll_cq(cq, 1, &wc) < 1);
+    
+    if (wc.status != IBV_WC_SUCCESS) {
+        printf("   ❌ Signal échoué (code: %d)\n", wc.status);
+        ibv_dereg_mr(rdma_mr);
+        ibv_dereg_mr(recv_mr);
+        ibv_destroy_qp(cm_id->qp);
+        ibv_destroy_cq(cq);
+        ibv_dealloc_pd(pd);
+        rdma_disconnect(cm_id);
+        rdma_destroy_id(cm_id);
+        rdma_destroy_event_channel(cm_channel);
+        return 1;
+    }
+    
+    printf("   ✅ Signal envoyé - attente données...\n\n");
+    
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 14 : ATTENDRE LE DONNÉES DU SERVEUR
+    // ═══════════════════════════════════════════════════════
+    printf("📖 ÉTAPE 14 : Réception données serveur\n");
+    
     // Attendre la réception des données
     while (ibv_poll_cq(cq, 1, &wc) < 1);
     
