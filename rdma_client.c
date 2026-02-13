@@ -334,6 +334,13 @@ int main(int argc, char *argv[]) {
     
     printf("   ✅ Infos reçues avec succès !\n\n");
 
+    // DEBUG: Afficher les bytes reçus
+    unsigned char *recv_buffer = (unsigned char *)(local_buffer + BUFFER_SIZE - sizeof(server_info));
+    printf("   📍 DEBUG RECV - Bytes reçus:\n");
+    for (int i = 0; i < sizeof(server_info); i++) {
+        printf("      [%d] = 0x%02x\n", i, recv_buffer[i]);
+    }
+
     memcpy(&server_info, local_buffer + BUFFER_SIZE - sizeof(server_info), sizeof(server_info));
     
     printf("   ┌─────────────────────────────────────────────┐\n");
@@ -341,6 +348,8 @@ int main(int argc, char *argv[]) {
     printf("   ├─────────────────────────────────────────────┤\n");
     printf("   │ Adresse RAM serveur : 0x%016lx  │\n", server_info.addr);
     printf("   │ RKEY (clé accès)    : 0x%08x            │\n", server_info.rkey);
+    printf("   │ local_buffer addr   : %p         │\n", local_buffer);
+    printf("   │ local_mr LKEY       : 0x%08x            │\n", local_mr->lkey);
     printf("   │                                             │\n");
     printf("   │ Je peux maintenant accéder à cette RAM !    │\n");
     printf("   │ → RDMA_READ  pour lire                      │\n");
@@ -414,7 +423,14 @@ int main(int argc, char *argv[]) {
     while (ibv_poll_cq(cq, 1, &wc) < 1);
     
     if (wc.status != IBV_WC_SUCCESS) {
-        printf("   ❌ RDMA READ échoué : %d\n", wc.status);
+        printf("   ❌ RDMA READ échoué\n");
+        printf("   📍 DEBUG - Work Completion Status: %d\n", wc.status);
+        printf("   📍 DEBUG - WR ID: %ld\n", wc.wr_id);
+        printf("   📍 DEBUG - Local buffer: %p\n", local_buffer);
+        printf("   📍 DEBUG - Local MR LKEY: 0x%x\n", local_mr->lkey);
+        printf("   📍 DEBUG - Remote addr: 0x%016lx\n", server_info.addr);
+        printf("   📍 DEBUG - Remote RKEY: 0x%08x\n", server_info.rkey);
+        printf("   📍 Status codes: 0=success, 4=local_length_error, 7=local_protection_error, 9=remote_access_error\n");
         ibv_dereg_mr(local_mr);
         free(local_buffer);
         ibv_destroy_qp(cm_id->qp);
