@@ -383,6 +383,29 @@ int main() {
     rdma_ack_cm_event(event);
     
     // ═══════════════════════════════════════════════════════
+    // INITIALISER LE QP : POST_RECV DUMMY
+    // ═══════════════════════════════════════════════════════
+    // Les QP doivent avoir au moins une opération RECV postée
+    // pour être complètement initialisés et prêts pour les
+    // opérations RDMA distantes (READ/WRITE)
+    
+    struct ibv_sge recv_sge_dummy;
+    recv_sge_dummy.addr = (uint64_t)buffer;
+    recv_sge_dummy.length = sizeof(struct rdma_buffer_info);
+    recv_sge_dummy.lkey = mr->lkey;
+    
+    struct ibv_recv_wr recv_wr_dummy, *bad_recv_wr;
+    memset(&recv_wr_dummy, 0, sizeof(recv_wr_dummy));
+    recv_wr_dummy.wr_id = 0;
+    recv_wr_dummy.sg_list = &recv_sge_dummy;
+    recv_wr_dummy.num_sge = 1;
+    
+    ret = ibv_post_recv(client_id->qp, &recv_wr_dummy, &bad_recv_wr);
+    if (ret) {
+        perror("   ⚠️  Dummy POST_RECV échoué (continue)");
+    }
+    
+    // ═══════════════════════════════════════════════════════
     // ÉTAPE 12 : ENVOYER LES INFOS AU CLIENT
     // ═══════════════════════════════════════════════════════
     // ON ENVOIE QUOI ?
