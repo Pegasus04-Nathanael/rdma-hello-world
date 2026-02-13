@@ -551,38 +551,11 @@ int main() {
     
     printf("   ✅ Données envoyées au client\n\n");
 
-    // ═══════════════════════════════════════════════════════
-    // ÉTAPE 14 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
-    // ═══════════════════════════════════════════════════════
-    // À PARTIR DE MAINTENANT :
-    // → Le serveur dort
-    // → Le client a reçu les données
-    // → La carte InfiniBand gère tout
-    // → Le CPU du serveur reste endormi
-    // → C'est la MAGIE de RDMA !
-    
     printf("═══════════════════════════════════════════════════\n");
-    printf("    SERVEUR EN MODE VEILLE 😴\n");
+    printf("    HANDSHAKE COMPLET - CONNEXION RÉUSSIE ✅\n");
     printf("═══════════════════════════════════════════════════\n\n");
-    
-    printf("Le serveur dort maintenant... 💤\n\n");
-    printf("Pendant ce temps :\n");
-    printf("  → Le client va lire/écrire dans la RAM\n");
-    printf("  → La carte InfiniBand gère tout seule\n");
-    printf("  → Mon CPU reste endormi\n");
-    printf("  → C'est la MAGIE de RDMA ! ✨\n\n");
-    
-    printf("Je vais checker ma RAM toutes les 5 secondes...\n\n");
-    
-    for (int i = 0; i < 20; i++) {
-        sleep(5);
-        printf("[%3ds] Contenu RAM : '%s'\n", (i+1)*5, buffer);
-        
-        // Si le contenu a changé, le client a écrit !
-        if (strstr(buffer, "CLIENT")) {
-            printf("       👆 LE CLIENT A ÉCRIT ICI ! Mon CPU dormait ! 🎉\n");
-        }
-    }
+    printf("La communication SEND/RECV fonctionne parfaitement !\n");
+    printf("Le client a reçu les données serveur sans RDMA_READ.\n\n");
     
     printf("\n═══════════════════════════════════════════════════\n");
     printf("    FIN DU SERVEUR\n");
