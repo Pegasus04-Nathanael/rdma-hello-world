@@ -528,14 +528,27 @@ int main(int argc, char *argv[]) {
     printf("   │ ✓ Latence : ~1-5 μs (vs 5 ms disque)       │\n");
     printf("   └─────────────────────────────────────────────┘\n\n");
     
-    // Cleanup
+    // Cleanup - ordre important !
+    // 1. Détruire QP (flushes pending work)
+    ibv_destroy_qp(cm_id->qp);
     
-    // Cleanup
+    // 2. Drainer CQ
+    int drain_count = 0;
+    while (ibv_poll_cq(cq, 1, &wc) > 0) {
+        drain_count++;
+    }
+    
+    // 3. Détruire CQ
+    ibv_destroy_cq(cq);
+    
+    // 4. Déregistrer MRs
     ibv_dereg_mr(rdma_mr);
     ibv_dereg_mr(recv_mr);
-    ibv_destroy_qp(cm_id->qp);
-    ibv_destroy_cq(cq);
+    
+    // 5. Deallocate PD
     ibv_dealloc_pd(pd);
+    
+    // 6-8. Connexion RDMA
     rdma_disconnect(cm_id);
     rdma_destroy_id(cm_id);
     rdma_destroy_event_channel(cm_channel);
