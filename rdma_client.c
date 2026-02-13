@@ -45,6 +45,7 @@ struct rdma_buffer_info {
 };
 
 int main(int argc, char *argv[]) {
+    struct rdma_buffer_info server_info;
     if (argc != 2) {
         printf("Usage: %s <server_ip>\n", argv[0]);
         printf("Exemple: %s 10.10.1.1\n", argv[0]);
@@ -231,6 +232,34 @@ int main(int argc, char *argv[]) {
     printf("   ✅ Buffer local créé et enregistré\n\n");
     
     // ═══════════════════════════════════════════════════════
+    // POSTER LE RECV ICI (AVANT CONNEXION) !
+    // ═══════════════════════════════════════════════════════
+    
+    //struct rdma_buffer_info server_info;
+    
+    struct ibv_sge recv_sge;
+    recv_sge.addr = (uint64_t)&server_info;
+    recv_sge.length = sizeof(server_info);
+    recv_sge.lkey = local_mr->lkey;
+    
+    struct ibv_recv_wr recv_wr, *bad_recv_wr;
+    memset(&recv_wr, 0, sizeof(recv_wr));
+    recv_wr.wr_id = 2;
+    recv_wr.sg_list = &recv_sge;
+    recv_wr.num_sge = 1;
+    
+    ret = ibv_post_recv(cm_id->qp, &recv_wr, &bad_recv_wr);
+    if (ret) {
+        perror("   ❌ ibv_post_recv");
+        return 1;
+    }
+    
+    printf("   ✅ RECV posté (prêt à recevoir du serveur)\n\n");
+
+
+
+
+    // ═══════════════════════════════════════════════════════
     // ÉTAPE 10 : SE CONNECTER AU SERVEUR
     // ═══════════════════════════════════════════════════════
     // CONCRÈTEMENT : Établir la connexion RDMA avec le serveur
@@ -273,48 +302,20 @@ int main(int argc, char *argv[]) {
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 11 : RECEVOIR LES INFOS DU SERVEUR
     // ═══════════════════════════════════════════════════════
-    // LE SERVEUR VA NOUS ENVOYER :
-    // → L'adresse de sa RAM
-    // → La RKEY (clé d'accès)
-    //
-    // AVEC CES 2 INFOS, ON POURRA FAIRE RDMA_READ/WRITE !
+    // LE RECV A DÉJÀ ÉTÉ POSTÉ À L'ÉTAPE 9 !
+    // ICI ON ATTEND JUSTE LA RÉCEPTION
     
     printf("📥 ÉTAPE 11 : Réception infos mémoire serveur\n");
+    printf("   (Le RECV est déjà posté, on attend...)\n\n");
     
-    struct rdma_buffer_info server_info;
-    
-    // Poster une receive request
-    struct ibv_sge recv_sge;
-    recv_sge.addr = (uint64_t)&server_info;
-    recv_sge.length = sizeof(server_info);
-    recv_sge.lkey = local_mr->lkey;
-    
-    struct ibv_recv_wr recv_wr, *bad_wr;
-    memset(&recv_wr, 0, sizeof(recv_wr));
-    recv_wr.wr_id = 2;
-    recv_wr.sg_list = &recv_sge;
-    recv_wr.num_sge = 1;
-    
-    ret = ibv_post_recv(cm_id->qp, &recv_wr, &bad_wr);
-    if (ret) {
-        perror("   ❌ ibv_post_recv");
-        ibv_dereg_mr(local_mr);
-        free(local_buffer);
-        ibv_destroy_qp(cm_id->qp);
-        ibv_destroy_cq(cq);
-        ibv_dealloc_pd(pd);
-        rdma_disconnect(cm_id);
-        rdma_destroy_id(cm_id);
-        rdma_destroy_event_channel(cm_channel);
-        return 1;
-    }
-    
-    // Attendre réception
+    // Attendre la complétion du RECV
     struct ibv_wc wc;
-    while (ibv_poll_cq(cq, 1, &wc) < 1);
+    while (ibv_poll_cq(cq, 1, &wc) < 1) {
+        // Polling... attente active
+    }
     
     if (wc.status != IBV_WC_SUCCESS) {
-        printf("   ❌ Réception échouée\n");
+        printf("   ❌ Réception échouée (status: %d)\n", wc.status);
         ibv_dereg_mr(local_mr);
         free(local_buffer);
         ibv_destroy_qp(cm_id->qp);
@@ -325,6 +326,8 @@ int main(int argc, char *argv[]) {
         rdma_destroy_event_channel(cm_channel);
         return 1;
     }
+    
+    printf("   ✅ Infos reçues avec succès !\n\n");
     
     printf("   ┌─────────────────────────────────────────────┐\n");
     printf("   │ INFORMATIONS REÇUES DU SERVEUR :            │\n");
