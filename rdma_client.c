@@ -34,6 +34,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/mman.h>
 #include <rdma/rdma_cma.h>
 
 #define BUFFER_SIZE 1024*1024  // 1 MB
@@ -63,6 +64,14 @@ int main(int argc, char *argv[]) {
     printf("    RDMA CLIENT - HELLO WORLD INFINIBAND\n");
     printf("═══════════════════════════════════════════════════\n\n");
     printf("Connexion au serveur %s...\n\n", argv[1]);
+    
+    // CRITICAL: Verrouiller la mémoire pour RDMA
+    printf("🔒 Verrouillage mémoire pour RDMA...\n");
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        perror("   ⚠️  mlockall échoué (non-critique, continue)");
+    } else {
+        printf("   ✅ Mémoire verrouillée pour RDMA\n\n");
+    }
     
     // ═══════════════════════════════════════════════════════
     // ÉTAPES 1-3 : CRÉER EVENT CHANNEL + CM ID
