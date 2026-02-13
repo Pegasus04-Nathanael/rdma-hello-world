@@ -400,8 +400,8 @@ int main() {
     
     printf("📤 ÉTAPE 12 : Envoi des infos au client\n");
     
-    // Copier les infos dans le buffer (qui est déjà enregistré avec RDMA)
-    struct rdma_buffer_info *info = (struct rdma_buffer_info *)buffer;
+    // Mettre info à la FIN du buffer, pas au début
+    struct rdma_buffer_info *info = (struct rdma_buffer_info *)(buffer + BUFFER_SIZE - sizeof(struct rdma_buffer_info));
     info->addr = (uint64_t)buffer;
     info->rkey = mr->rkey;
 
@@ -447,8 +447,7 @@ int main() {
     }
 
     printf("   ✅ Infos envoyées au client\n\n");
-    // Pour restaurer le message dans le buffer (il a été écrasé par info)
-    strcpy(buffer, "Hello from Server! This is RDMA magic.");
+
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 13 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
     // ═══════════════════════════════════════════════════════
