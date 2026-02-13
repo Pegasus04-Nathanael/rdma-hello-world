@@ -51,14 +51,11 @@ int main() {
     // Cette RAM est normale pour l'instant (pas encore RDMA-accessible)
     
     printf("📦 ÉTAPE 1 : Allocation mémoire\n");
-    printf("   Allouons 1 MB de RAM...\n");
+    printf("   Utilisons buffer statique (pré-alloué)...\n");
     
-    char *buffer = malloc(BUFFER_SIZE);
-    if (!buffer) {
-        printf("   ❌ Échec allocation mémoire\n");
-        return 1;
-    }
-    
+    // Buffer STATIQUE - plus stable pour RDMA, déjà en mémoire
+    static char buffer[1024*1024] __attribute__((aligned(4096)));
+    memset(buffer, 0, sizeof(buffer));
     strcpy(buffer, "Hello from Server! This is RDMA magic.");
     
     printf("   ✅ RAM allouée à l'adresse : %p\n", buffer);
@@ -78,7 +75,6 @@ int main() {
     struct rdma_event_channel *cm_channel = rdma_create_event_channel();
     if (!cm_channel) {
         perror("   ❌ rdma_create_event_channel");
-        free(buffer);
         return 1;
     }
     
@@ -100,7 +96,6 @@ int main() {
     if (ret) {
         perror("   ❌ rdma_create_id");
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -127,7 +122,6 @@ int main() {
         perror("   ❌ rdma_bind_addr");
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -148,7 +142,6 @@ int main() {
         perror("   ❌ rdma_listen");
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -173,7 +166,6 @@ int main() {
         perror("   ❌ rdma_get_cm_event");
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -182,7 +174,6 @@ int main() {
         rdma_ack_cm_event(event);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -207,7 +198,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -258,7 +248,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -294,7 +283,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -333,7 +321,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -361,7 +348,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -379,7 +365,6 @@ int main() {
         rdma_destroy_id(client_id);
         rdma_destroy_id(cm_id);
         rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
     
@@ -508,7 +493,6 @@ int main() {
     rdma_destroy_id(client_id);
     rdma_destroy_id(cm_id);
     rdma_destroy_event_channel(cm_channel);
-    free(buffer);
     
     return 0;
 }
