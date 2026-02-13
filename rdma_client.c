@@ -38,6 +38,10 @@
 
 #define BUFFER_SIZE 1024*1024  // 1 MB
 
+// Buffers statiques - pré-alloués et alignés  
+static char recv_buffer_static[1024*1024] __attribute__((aligned(4096)));
+static char rdma_buffer_static[1024*1024] __attribute__((aligned(4096)));
+
 // Structure pour recevoir les infos RDMA du serveur
 struct rdma_buffer_info {
     uint64_t addr;      // Adresse de la RAM serveur
@@ -206,39 +210,19 @@ int main(int argc, char *argv[]) {
     // → On enregistre aussi cette RAM pour RDMA (ibv_reg_mr)
     
     printf("📦 ÉTAPE 9 : Allocation buffers locaux\n");
-    printf("   (Séparé: un pour RECV, un pour RDMA)\n");
+    printf("   (Statiques, pré-alignés à 4KB)\n");
     
-    // Buffer pour RECV (recevoir les infos du serveur)
-    char *recv_buffer = malloc(BUFFER_SIZE);
-    if (!recv_buffer) {
-        printf("   ❌ Échec allocation recv_buffer\n");
-        ibv_destroy_qp(cm_id->qp);
-        ibv_destroy_cq(cq);
-        ibv_dealloc_pd(pd);
-        rdma_destroy_id(cm_id);
-        rdma_destroy_event_channel(cm_channel);
-        return 1;
-    }
+    // Buffers STATIQUES - plus stables pour RDMA
+    char *recv_buffer = recv_buffer_static;
+    char *rdma_buffer = rdma_buffer_static;
+    
+    memset(recv_buffer, 0, BUFFER_SIZE);
+    memset(rdma_buffer, 0, BUFFER_SIZE);
     
     struct ibv_mr *recv_mr = ibv_reg_mr(pd, recv_buffer, BUFFER_SIZE,
                                          IBV_ACCESS_LOCAL_WRITE);
     if (!recv_mr) {
         perror("   ❌ ibv_reg_mr (recv)");
-        free(recv_buffer);
-        ibv_destroy_qp(cm_id->qp);
-        ibv_destroy_cq(cq);
-        ibv_dealloc_pd(pd);
-        rdma_destroy_id(cm_id);
-        rdma_destroy_event_channel(cm_channel);
-        return 1;
-    }
-    
-    // Buffer pour RDMA READ (stocker les données lues)
-    char *rdma_buffer = malloc(BUFFER_SIZE);
-    if (!rdma_buffer) {
-        printf("   ❌ Échec allocation rdma_buffer\n");
-        ibv_dereg_mr(recv_mr);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -251,9 +235,7 @@ int main(int argc, char *argv[]) {
                                          IBV_ACCESS_LOCAL_WRITE);
     if (!rdma_mr) {
         perror("   ❌ ibv_reg_mr (rdma)");
-        free(rdma_buffer);
         ibv_dereg_mr(recv_mr);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -289,8 +271,6 @@ int main(int argc, char *argv[]) {
         perror("   ❌ ibv_post_recv");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -319,8 +299,6 @@ int main(int argc, char *argv[]) {
         perror("   ❌ rdma_connect");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -335,8 +313,6 @@ int main(int argc, char *argv[]) {
         if (event) rdma_ack_cm_event(event);
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -367,8 +343,6 @@ int main(int argc, char *argv[]) {
         printf("   ❌ Réception échouée (status: %d)\n", wc.status);
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -458,8 +432,7 @@ int main(int argc, char *argv[]) {
         perror("   ❌ ibv_post_send (READ)");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
+
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -483,8 +456,7 @@ int main(int argc, char *argv[]) {
         printf("   📍 Status codes: 0=success, 4=local_length_error, 7=local_protection_error, 9=remote_access_error\n");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
+
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -564,8 +536,6 @@ int main(int argc, char *argv[]) {
         perror("   ❌ ibv_post_send (WRITE)");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -582,8 +552,6 @@ int main(int argc, char *argv[]) {
         printf("   ❌ RDMA WRITE échoué : %d\n", wc.status);
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -620,8 +588,6 @@ int main(int argc, char *argv[]) {
         perror("   ❌ ibv_post_send (READ verification)");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -637,8 +603,6 @@ int main(int argc, char *argv[]) {
         printf("   ❌ Vérification échouée\n");
         ibv_dereg_mr(rdma_mr);
         ibv_dereg_mr(recv_mr);
-        free(rdma_buffer);
-        free(recv_buffer);
         ibv_destroy_qp(cm_id->qp);
         ibv_destroy_cq(cq);
         ibv_dealloc_pd(pd);
@@ -663,8 +627,6 @@ int main(int argc, char *argv[]) {
     // Cleanup
     ibv_dereg_mr(rdma_mr);
     ibv_dereg_mr(recv_mr);
-    free(rdma_buffer);
-    free(recv_buffer);
     ibv_destroy_qp(cm_id->qp);
     ibv_destroy_cq(cq);
     ibv_dealloc_pd(pd);
