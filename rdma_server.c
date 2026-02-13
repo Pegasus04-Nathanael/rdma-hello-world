@@ -447,6 +447,8 @@ int main() {
     }
 
     printf("   ✅ Infos envoyées au client\n\n");
+    // Pour restaurer le message dans le buffer (il a été écrasé par info)
+    strcpy(buffer, "Hello from Server! This is RDMA magic.");
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 13 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
     // ═══════════════════════════════════════════════════════
