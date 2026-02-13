@@ -482,13 +482,45 @@ int main() {
 
     printf("   ✅ Infos envoyées au client\n\n");
     
-    // Attendre que le client poste son RECV
-    sleep(1);
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 13 : ATTENDRE SIGNAL DU CLIENT AVANT D'ENVOYER
+    // ═══════════════════════════════════════════════════════
+    // Le client va nous envoyer un dummy message pour signaler
+    // qu'il a posté son RECV et est prêt à recevoir
+    
+    printf("📥 ÉTAPE 13 : Attente signal client avant envoi données...\n");
+    
+    struct ibv_sge sge_signal;
+    sge_signal.addr = (uint64_t)buffer;
+    sge_signal.length = 1;  // Juste 1 byte
+    sge_signal.lkey = mr->lkey;
+    
+    struct ibv_recv_wr recv_signal_wr, *bad_recv_signal_wr;
+    memset(&recv_signal_wr, 0, sizeof(recv_signal_wr));
+    recv_signal_wr.wr_id = 100;
+    recv_signal_wr.sg_list = &sge_signal;
+    recv_signal_wr.num_sge = 1;
+    
+    ret = ibv_post_recv(client_id->qp, &recv_signal_wr, &bad_recv_signal_wr);
+    if (ret) {
+        perror("   ❌ ibv_post_recv (signal)");
+        return 1;
+    }
+    
+    // Attendre le signal du client
+    while (ibv_poll_cq(cq, 1, &wc) < 1);
+    
+    if (wc.status != IBV_WC_SUCCESS) {
+        printf("   ❌ Signal échoué (status: %d)\n", wc.status);
+        return 1;
+    }
+    
+    printf("   ✅ Signal reçu - le client est prêt\n\n");
     
     // ═══════════════════════════════════════════════════════
-    // ÉTAPE 13 : ENVOYER LE CONTENU DU BUFFER AU CLIENT
+    // ÉTAPE 14 : ENVOYER LE CONTENU DU BUFFER AU CLIENT
     // ═══════════════════════════════════════════════════════
-    printf("📤 ÉTAPE 13 : Envoi contenu RAM au client\n");
+    printf("📤 ÉTAPE 14 : Envoi contenu RAM au client\n");
     
     struct ibv_sge sge_data;
     sge_data.addr = (uint64_t)buffer;
