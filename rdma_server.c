@@ -398,10 +398,22 @@ int main() {
     // → Faire RDMA_WRITE pour écrire dans la RAM
     // → SANS réveiller le CPU du serveur !
     
+    // ═══════════════════════════════════════════════════════
+    // ÉTAPE 12 : ENVOYER LES INFOS AU CLIENT
+    // ═══════════════════════════════════════════════════════
+    // ON ENVOIE QUOI ?
+    // → L'adresse virtuelle de la RAM
+    // → La RKEY (clé d'accès)
+    //
+    // AVEC CES 2 INFOS, LE CLIENT POURRA :
+    // → Faire RDMA_READ pour lire la RAM
+    // → Faire RDMA_WRITE pour écrire dans la RAM
+    // → SANS réveiller le CPU du serveur !
+    
     printf("📤 ÉTAPE 12 : Envoi des infos au client\n");
     
-    // Mettre info à la FIN du buffer, pas au début
-    struct rdma_buffer_info *info = (struct rdma_buffer_info *)(buffer + BUFFER_SIZE - sizeof(struct rdma_buffer_info));
+    // Placer les infos au DÉBUT du buffer (plus sûr)
+    struct rdma_buffer_info *info = (struct rdma_buffer_info *)buffer;
     info->addr = (uint64_t)buffer;
     info->rkey = mr->rkey;
 
@@ -410,6 +422,9 @@ int main() {
     printf("   ├─────────────────────────────────────────────┤\n");
     printf("   │ Adresse RAM : 0x%016lx          │\n", info->addr);
     printf("   │ RKEY        : 0x%08x                    │\n", info->rkey);
+    printf("   │ Info addr   : 0x%016lx (start)     │\n", (uint64_t)info);
+    printf("   │ Buffer addr : 0x%016lx                │\n", (uint64_t)buffer);
+    printf("   │ MR LKEY     : 0x%08x                    │\n", mr->lkey);
     printf("   │                                             │\n");
     printf("   │ Le client peut maintenant :                 │\n");
     printf("   │ • RDMA_READ  → lire cette RAM               │\n");
@@ -419,7 +434,7 @@ int main() {
 
     // Préparer la requête d'envoi (depuis le buffer qui est enregistré)
     struct ibv_sge sge;
-    sge.addr = (uint64_t)info;  // ← Envoyer depuis info, pas buffer !
+    sge.addr = (uint64_t)info;  // ← Envoyer depuis le DÉBUT du buffer
     sge.length = sizeof(struct rdma_buffer_info);
     sge.lkey = mr->lkey;
 

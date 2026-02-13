@@ -269,12 +269,12 @@ int main(int argc, char *argv[]) {
     // ═══════════════════════════════════════════════════════
     // POSTER LE RECV ICI (AVANT CONNEXION) !
     // ═══════════════════════════════════════════════════════
-    // NOTE: Les infos du serveur arrivent à la FIN du recv_buffer
+    // NOTE: Le serveur met les infos au DÉBUT du recv_buffer
     
     //struct rdma_buffer_info server_info;
     
     struct ibv_sge recv_sge;
-    recv_sge.addr = (uint64_t)(recv_buffer + BUFFER_SIZE - sizeof(server_info));  // ← À la FIN du recv_buffer !
+    recv_sge.addr = (uint64_t)recv_buffer;  // ← Au DÉBUT, pas à la fin !
     recv_sge.length = sizeof(server_info);
     recv_sge.lkey = recv_mr->lkey;
     
@@ -381,21 +381,21 @@ int main(int argc, char *argv[]) {
     printf("   ✅ Infos reçues avec succès !\n\n");
 
     // DEBUG: Afficher les bytes reçus
-    unsigned char *recv_data = (unsigned char *)(recv_buffer + BUFFER_SIZE - sizeof(server_info));
+    unsigned char *recv_data = (unsigned char *)recv_buffer;
     printf("   📍 DEBUG RECV - Bytes reçus:\n");
     for (int i = 0; i < sizeof(server_info); i++) {
         printf("      [%d] = 0x%02x\n", i, recv_data[i]);
     }
 
-    memcpy(&server_info, recv_buffer + BUFFER_SIZE - sizeof(server_info), sizeof(server_info));
+    memcpy(&server_info, recv_buffer, sizeof(server_info));
     
     printf("   ┌─────────────────────────────────────────────┐\n");
     printf("   │ INFORMATIONS REÇUES DU SERVEUR :            │\n");
     printf("   ├─────────────────────────────────────────────┤\n");
     printf("   │ Adresse RAM serveur : 0x%016lx  │\n", server_info.addr);
     printf("   │ RKEY (clé accès)    : 0x%08x            │\n", server_info.rkey);
-    printf("   │ recv_buffer addr    : %p         │\n", recv_buffer);
-    printf("   │ rdma_buffer addr    : %p         │\n", rdma_buffer);
+    printf("   │ recv_buffer addr    : 0x%016lx    │\n", (uint64_t)recv_buffer);
+    printf("   │ rdma_buffer addr    : 0x%016lx    │\n", (uint64_t)rdma_buffer);
     printf("   │ recv_mr LKEY        : 0x%08x            │\n", recv_mr->lkey);
     printf("   │ rdma_mr LKEY        : 0x%08x            │\n", rdma_mr->lkey);
     printf("   │                                             │\n");
