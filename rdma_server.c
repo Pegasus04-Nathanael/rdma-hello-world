@@ -400,28 +400,29 @@ int main() {
     
     printf("📤 ÉTAPE 12 : Envoi des infos au client\n");
     
-    struct rdma_buffer_info info;
-    info.addr = (uint64_t)buffer;
-    info.rkey = mr->rkey;
-    
+    // Copier les infos dans le buffer (qui est déjà enregistré avec RDMA)
+    struct rdma_buffer_info *info = (struct rdma_buffer_info *)buffer;
+    info->addr = (uint64_t)buffer;
+    info->rkey = mr->rkey;
+
     printf("   ┌─────────────────────────────────────────────┐\n");
     printf("   │ INFORMATIONS ENVOYÉES AU CLIENT :           │\n");
     printf("   ├─────────────────────────────────────────────┤\n");
-    printf("   │ Adresse RAM : 0x%016lx          │\n", info.addr);
-    printf("   │ RKEY        : 0x%08x                    │\n", info.rkey);
+    printf("   │ Adresse RAM : 0x%016lx          │\n", info->addr);
+    printf("   │ RKEY        : 0x%08x                    │\n", info->rkey);
     printf("   │                                             │\n");
     printf("   │ Le client peut maintenant :                 │\n");
     printf("   │ • RDMA_READ  → lire cette RAM               │\n");
     printf("   │ • RDMA_WRITE → écrire dans cette RAM        │\n");
     printf("   │ • Sans JAMAIS réveiller mon CPU ! 😴        │\n");
     printf("   └─────────────────────────────────────────────┘\n\n");
-    
-    // Préparer la requête d'envoi
+
+    // Préparer la requête d'envoi (depuis le buffer qui est enregistré)
     struct ibv_sge sge;
-    sge.addr = (uint64_t)&info;
-    sge.length = sizeof(info);
+    sge.addr = (uint64_t)buffer;  // ← buffer, pas &info
+    sge.length = sizeof(struct rdma_buffer_info);
     sge.lkey = mr->lkey;
-    
+
     struct ibv_send_wr send_wr, *bad_wr;
     memset(&send_wr, 0, sizeof(send_wr));
     send_wr.wr_id = 1;
@@ -429,40 +430,23 @@ int main() {
     send_wr.num_sge = 1;
     send_wr.opcode = IBV_WR_SEND;
     send_wr.send_flags = IBV_SEND_SIGNALED;
-    
+
     ret = ibv_post_send(client_id->qp, &send_wr, &bad_wr);
     if (ret) {
         perror("   ❌ ibv_post_send");
-        ibv_destroy_qp(client_id->qp);
-        ibv_destroy_cq(cq);
-        ibv_dereg_mr(mr);
-        ibv_dealloc_pd(pd);
-        rdma_destroy_id(client_id);
-        rdma_destroy_id(cm_id);
-        rdma_destroy_event_channel(cm_channel);
-        free(buffer);
         return 1;
     }
-    
+
     // Attendre la complétion
     struct ibv_wc wc;
     while (ibv_poll_cq(cq, 1, &wc) < 1);
-    
+
     if (wc.status != IBV_WC_SUCCESS) {
-        printf("   ❌ Envoi échoué\n");
-        ibv_destroy_qp(client_id->qp);
-        ibv_destroy_cq(cq);
-        ibv_dereg_mr(mr);
-        ibv_dealloc_pd(pd);
-        rdma_destroy_id(client_id);
-        rdma_destroy_id(cm_id);
-        rdma_destroy_event_channel(cm_channel);
-        free(buffer);
+        printf("   ❌ Envoi échoué (status: %d)\n", wc.status);
         return 1;
     }
-    
+
     printf("   ✅ Infos envoyées au client\n\n");
-    
     // ═══════════════════════════════════════════════════════
     // ÉTAPE 13 : DORMIR - LE SERVEUR NE FAIT PLUS RIEN !
     // ═══════════════════════════════════════════════════════

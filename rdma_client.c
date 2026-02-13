@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
     //struct rdma_buffer_info server_info;
     
     struct ibv_sge recv_sge;
-    recv_sge.addr = (uint64_t)&server_info;
+    recv_sge.addr = (uint64_t)local_buffer;  // ← ICI !
     recv_sge.length = sizeof(server_info);
     recv_sge.lkey = local_mr->lkey;
     
@@ -328,6 +328,8 @@ int main(int argc, char *argv[]) {
     }
     
     printf("   ✅ Infos reçues avec succès !\n\n");
+
+    memcpy(&server_info, local_buffer, sizeof(server_info));
     
     printf("   ┌─────────────────────────────────────────────┐\n");
     printf("   │ INFORMATIONS REÇUES DU SERVEUR :            │\n");
