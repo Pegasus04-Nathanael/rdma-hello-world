@@ -376,6 +376,8 @@ int main(int argc, char *argv[]) {
     read_sge.addr = (uint64_t)local_buffer;
     read_sge.length = 100;  // Lire 100 octets
     read_sge.lkey = local_mr->lkey;
+
+    struct ibv_send_wr *bad_wr = NULL;
     
     struct ibv_send_wr read_wr;
     memset(&read_wr, 0, sizeof(read_wr));
