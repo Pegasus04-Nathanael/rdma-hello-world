@@ -35,6 +35,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <rdma/rdma_cma.h>
 
 #define BUFFER_SIZE 1024*1024  // 1 MB
@@ -496,12 +497,21 @@ int main(int argc, char *argv[]) {
     printf("   ✅ Signal envoyé - attente données...\n\n");
     
     // ═══════════════════════════════════════════════════════
-    // ÉTAPE 14 : ATTENDRE LE DONNÉES DU SERVEUR
+    // ÉTAPE 14 : MESURER LA LATENCE RÉELLE
     // ═══════════════════════════════════════════════════════
+    struct timespec latency_start, latency_end;
+    clock_gettime(CLOCK_MONOTONIC, &latency_start);
+    
     printf("📖 ÉTAPE 14 : Réception données serveur\n");
     
     // Attendre la réception des données
     while (ibv_poll_cq(cq, 1, &wc) < 1);
+    
+    clock_gettime(CLOCK_MONOTONIC, &latency_end);
+    
+    // Calculer la latence en microsecondes
+    long latency_us = (latency_end.tv_sec - latency_start.tv_sec) * 1000000 +
+                      (latency_end.tv_nsec - latency_start.tv_nsec) / 1000;
     
     if (wc.status != IBV_WC_SUCCESS) {
         printf("   ❌ Réception données échouée (code: %d)\n", wc.status);
@@ -525,31 +535,34 @@ int main(int argc, char *argv[]) {
     printf("   │                                             │\n");
     printf("   │ ✓ Le serveur ne s'est PAS réveillé !        │\n");
     printf("   │ ✓ Sa carte InfiniBand a géré seule !        │\n");
-    printf("   │ ✓ Latence : ~1-5 μs (vs 5 ms disque)       │\n");
+    printf("   │ ✓ Latence RÉELLE mesurée : %ld μs          │\n", latency_us);
+    printf("   │ ✓ (vs ~500 μs pour TCP/IP)                │\n");
     printf("   └─────────────────────────────────────────────┘\n\n");
     
-    // Cleanup - ordre important !
-    // 1. Détruire QP (flushes pending work)
+    // Cleanup - ORDRE CRITIQUE POUR RDMA !
+    // 1. Disconnect RDMA en premier (avant destruction QP)
+    rdma_disconnect(cm_id);
+    
+    // 2. Destroy QP
     ibv_destroy_qp(cm_id->qp);
     
-    // 2. Drainer CQ
+    // 3. Drain CQ
     int drain_count = 0;
     while (ibv_poll_cq(cq, 1, &wc) > 0) {
         drain_count++;
     }
     
-    // 3. Détruire CQ
+    // 4. Destroy CQ
     ibv_destroy_cq(cq);
     
-    // 4. Déregistrer MRs
+    // 5. Deregister MRs
     ibv_dereg_mr(rdma_mr);
     ibv_dereg_mr(recv_mr);
     
-    // 5. Deallocate PD
+    // 6. Deallocate PD
     ibv_dealloc_pd(pd);
     
-    // 6-8. Connexion RDMA
-    rdma_disconnect(cm_id);
+    // 7-9. RDMA cleanup
     rdma_destroy_id(cm_id);
     rdma_destroy_event_channel(cm_channel);
     
